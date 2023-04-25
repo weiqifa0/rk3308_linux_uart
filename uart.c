@@ -1,5 +1,5 @@
 /*
-** Copyright (c) 2023 The Roomix project. All rights reserved.
+** Copyright (c) 2023 The tinylinux project. All rights reserved.
 ** Created by crisqifawei 2023
 */
 #ifdef __cplusplus
