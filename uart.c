@@ -1,5 +1,5 @@
 /*
-** Copyright (c) 2023 The tinylinux project. All rights reserved.
+** Copyright (c) 2023 The Roomix project. All rights reserved.
 ** Created by crisqifawei 2023
 */
 #ifdef __cplusplus
@@ -59,8 +59,10 @@ int uart_init(int fd, int speed, int flow_ctrl, int data_bits, int stop_bits, in
 	int name_arr[] =  {115200, 19200, 9600, 4800, 2400, 1200, 300};
 
 	struct termios options;
+	printf("speed = %d, flow_ctrl = %d, data_bits = %d, stop_bits =%d, parity =%d\n",
+									speed, flow_ctrl, data_bits, stop_bits, parity);
 	if(0 != tcgetattr(fd, &options)) {
-		printf("SetupSerial 1\n");
+		printf("read uart parm error, check device driver\n");
 		return UART_ERR;
 	}
 
@@ -220,12 +222,14 @@ int main(int argc, char **argv)
 {
 	int ret, i;
 	int serial_fd;
+	int serial_speed;
 	char buf[LEN_BUF_SEND];
 	pthread_t serial_receive_t;
 
-	if(argc != 2) {
+	if(argc < 2) {
 		printf("Usage:   %s /dev/ttySx    #0(open uart x data)\n",argv[0]);
-		printf("Example: %s /dev/ttyS1 1  #1(open uart 1 data)\n",argv[1]);
+		printf("Example: %s /dev/ttyS1    #1(open uart 1 data)\n",argv[1]);
+		printf("Example: %s %s /dev/ttyS1 115200   #1(open uart 1 speed 115200)\n", argv[1], argv[1]);
 		printf("Input Error\n");
 		return UART_ERR;
 	}
@@ -236,10 +240,21 @@ int main(int argc, char **argv)
 		return UART_ERR;
 	}
 
-	ret = uart_init(serial_fd, 9600, 0, 8, 1, 'N');
-	if(UART_ERR == ret) {
-		printf("ret init = %d\n",ret);
-		return UART_ERR;
+	if (argc == 2) {
+		ret = uart_init(serial_fd, 9600, 0, 8, 1, 'N');
+		if(UART_ERR == ret) {
+			printf("ret init = %d\n",ret);
+			return UART_ERR;
+		}
+	} else {
+		if ((serial_speed = atoi(argv[2])) < 0) {
+			serial_speed = 9600;
+		}
+		ret = uart_init(serial_fd, serial_speed, 0, 8, 1, 'N');
+		if(UART_ERR == ret) {
+			printf("ret init = %d\n",ret);
+			return UART_ERR;
+		}
 	}
 
 	if (pthread_create(&serial_receive_t, NULL, uart_receive_thread, &serial_fd) < 0) {
