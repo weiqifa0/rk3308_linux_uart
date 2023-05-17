@@ -7,6 +7,7 @@ extern "C" {
 #endif
 #include<stdio.h>
 #include<stdlib.h>
+#include<stdbool.h>
 #include<unistd.h>
 #include<sys/types.h>
 #include<sys/stat.h>
@@ -15,61 +16,68 @@ extern "C" {
 #include<errno.h>
 #include<string.h>
 #include<pthread.h>
+#include <signal.h>
 
 #define UART_ERR  -1
 #define UART_OK   0
 
 #define LEN_BUF_RECV 128
 #define LEN_BUF_SEND 128
+#define DEFAULT_BAUDRATE 9600
+
+#define UART_DEBUG 0
+#define uart_debug(format,...) printf("[UART]:%s(), Line: %05d: " format "\n", __FUNCTION__, __LINE__, ##__VA_ARGS__)
+volatile bool g_is_quit = false;
 
 int uart_open(char* dev)
 {
-	int ret;
-	int fd;
+	int ret, fd;
 
 	fd = open(dev, O_RDWR|O_NOCTTY|O_NDELAY);
 	if (fd < 0) {
-		printf("open uart failed\n");
+		uart_debug("open uart failed");
 		return UART_ERR;
 	}
 	//恢复串口为阻塞状态
 	ret = fcntl(fd, F_SETFL, 0);
 	if(0 > ret) {
-		printf("fcntl failed!\n");
+		uart_debug("fcntl failed!");
 		return UART_ERR;
 	}
 	//测试是否为终端设备
 	if(0 == isatty(STDIN_FILENO)) {
-		printf("standard input is not a terminal device\n");
+		uart_debug("standard input is not a terminal device\n");
 		return UART_ERR;
 	}
-	printf("open %s success! fd = %d\n", dev, fd);
+	uart_debug("open %s success! fd = %d", dev, fd);
 	return fd;
 }
 
 void uart_close(int fd)
 {
-	close(fd);
+	if (fd >= 0) {
+		close(fd);
+	}
 }
 
-int uart_init(int fd, int speed, int flow_ctrl, int data_bits, int stop_bits, int parity)
+int uart_init(int fd, int baud_rate, int flow_ctrl, int data_bits, int stop_bits, int parity)
 {
 	int i, status;
-	int speed_arr[] = {B115200, B19200, B9600, B4800, B2400, B1200, B300};
-	int name_arr[] =  {115200, 19200, 9600, 4800, 2400, 1200, 300};
+	int baud_rate_array[] = {B115200, B19200, B9600, B4800, B2400, B1200, B300};
+	int baud_rate_seting_array[] = {115200, 19200, 9600, 4800, 2400, 1200, 300};
 
 	struct termios options;
-	printf("speed = %d, flow_ctrl = %d, data_bits = %d, stop_bits =%d, parity =%d\n",
-									speed, flow_ctrl, data_bits, stop_bits, parity);
+	uart_debug("baud_rate = %d, flow_ctrl = %d, data_bits = %d, stop_bits =%d, parity =%d",
+									baud_rate, flow_ctrl, data_bits, stop_bits, parity);
 	if(0 != tcgetattr(fd, &options)) {
-		printf("read uart parm error, check device driver\n");
+		uart_debug("read uart parm error, check device driver");
 		return UART_ERR;
 	}
 
-	for ( i= 0; i < sizeof(speed_arr) / sizeof(speed_arr[0]); i++) {
-		if  (speed == name_arr[i]) {
-			cfsetispeed(&options, speed_arr[i]);
-			cfsetospeed(&options, speed_arr[i]);
+	for (i= 0; i < sizeof(baud_rate_array) / sizeof(baud_rate_array[0]); i++) {
+		if  (baud_rate == baud_rate_seting_array[i]) {
+			cfsetispeed(&options, baud_rate_array[i]);
+			cfsetospeed(&options, baud_rate_array[i]);
 		}
 	}
 
@@ -107,7 +115,7 @@ int uart_init(int fd, int speed, int flow_ctrl, int data_bits, int stop_bits, in
 		options.c_cflag |= CS8;
 		break;
 	default:
-		printf("Unsupported data size\n");
+		uart_debug("unsupported data size");
 		return UART_ERR;
 	}
 
@@ -135,7 +143,7 @@ int uart_init(int fd, int speed, int flow_ctrl, int data_bits, int stop_bits, in
 		options.c_cflag &= ~CSTOPB;
 		break;
 	default:
-		printf("Unsupported parity\n");
+		uart_debug("unsupported parity");
 		return UART_ERR;
 	}
 	// 设置停止位
@@ -147,7 +155,7 @@ int uart_init(int fd, int speed, int flow_ctrl, int data_bits, int stop_bits, in
 		options.c_cflag |= CSTOPB;
 		break;
 	default:
-		printf("Unsupported stop bits\n");
+		uart_debug("Unsupported stop bits");
 		return UART_ERR;
 	}
 
@@ -166,7 +174,7 @@ int uart_init(int fd, int speed, int flow_ctrl, int data_bits, int stop_bits, in
 
 	//激活配置 (将修改后的termios数据设置到串口中）
 	if (0 != tcsetattr(fd,TCSANOW,&options)) {
-		printf("com set error!\n");
+		uart_debug("com set error!");
 		return UART_ERR;
 	}
 
@@ -176,8 +184,13 @@ int uart_init(int fd, int speed, int flow_ctrl, int data_bits, int stop_bits, in
 int uart_send(int fd, char *buf, int data_len)
 {
 	int len = 0;
+	if (data_len == 0) {
+		return UART_OK;
+	}
 	len = write(fd, buf, data_len);
+#if UART_DEBUG
 	printf("send data:%s\n", buf);
+#endif
 	if (len != data_len) {
 		tcflush(fd, TCOFLUSH);
 		return UART_ERR;
@@ -186,28 +199,31 @@ int uart_send(int fd, char *buf, int data_len)
 	return UART_OK;
 }
 
-static void *uart_receive_thread(void *arg)
+static void *serial_port_receiving_thread(void *arg)
 {
 	int ret, i, n;
-	int serial_fd;
+	int fd;
 	fd_set readfds;
 	char buf[LEN_BUF_RECV];
-	serial_fd = *(int*)arg;
-	for (;;) {
+	fd = *(int*)arg;
+	for(;!g_is_quit;) {
 		FD_ZERO(&readfds);
-		FD_SET(serial_fd, &readfds);
-		ret = select(serial_fd + 1, &readfds, NULL, NULL, NULL);
+		FD_SET(fd, &readfds);
+		ret = select(fd + 1, &readfds, NULL, NULL, NULL);
 
 		if(ret <= 0) {
-			printf("select failed %d\n", ret);
+			uart_debug("select failed %d", ret);
 			continue;
 		}
-		if(FD_ISSET(serial_fd, &readfds) <= 0){
-			printf("FD_ISSET failed\n");
+		if(FD_ISSET(fd, &readfds) <= 0){
+			uart_debug("FD_ISSET failed");
 			continue;
 		}
 		do {
-			n = read(serial_fd, buf, LEN_BUF_RECV);
+			n = read(fd, buf, LEN_BUF_RECV);
+	#if UART_DEBUG
+			uart_debug("%s", buf);
+	#endif
 			for (i = 0; i < n; i++) {
 				printf("%.2x ", buf[i]);
 			}
@@ -218,60 +234,64 @@ static void *uart_receive_thread(void *arg)
 	return NULL;
 }
 
+void sighandler(int signum) {
+  g_is_quit = true;
+  uart_debug("Quit");
+}
+
 int main(int argc, char **argv)
 {
-	int ret, i;
-	int serial_fd;
-	int serial_speed;
+	int ret, fd, baud_rate;
 	char buf[LEN_BUF_SEND];
 	pthread_t serial_receive_t;
 
 	if(argc < 2) {
-		printf("Usage:   %s /dev/ttySx    #0(open uart x data)\n",argv[0]);
-		printf("Example: %s /dev/ttyS1    #1(open uart 1 data)\n",argv[1]);
-		printf("Example: %s %s /dev/ttyS1 115200   #1(open uart 1 speed 115200)\n", argv[1], argv[1]);
-		printf("Input Error\n");
+		uart_debug("Usage:   %s /dev/ttySx    #0(open uart x data)", argv[0]);
+		uart_debug("Example: %s /dev/ttyS1    #1(open uart 1 data)", argv[1]);
+		uart_debug("Example: %s %s /dev/ttyS1 115200   #1(open uart 1 speed 115200)", argv[1], argv[1]);
 		return UART_ERR;
 	}
 
-	serial_fd = uart_open(argv[1]);
-	if(UART_ERR == serial_fd) {
-		printf("uart_open error = %d\n", serial_fd);
+	fd = uart_open(argv[1]);
+	if(UART_ERR == fd) {
+		uart_debug("uart_open error = %d", fd);
 		return UART_ERR;
 	}
 
 	if (argc == 2) {
-		ret = uart_init(serial_fd, 9600, 0, 8, 1, 'N');
+		ret = uart_init(fd, DEFAULT_BAUDRATE, 0, 8, 1, 'N');
 		if(UART_ERR == ret) {
-			printf("ret init = %d\n",ret);
+			uart_debug("uart_init error = %d",ret);
 			return UART_ERR;
 		}
 	} else {
-		if ((serial_speed = atoi(argv[2])) < 0) {
-			serial_speed = 9600;
+		if ((baud_rate = atoi(argv[2])) < 0) {
+			baud_rate = DEFAULT_BAUDRATE;
 		}
-		ret = uart_init(serial_fd, serial_speed, 0, 8, 1, 'N');
+		ret = uart_init(fd, baud_rate, 0, 8, 1, 'N');
 		if(UART_ERR == ret) {
-			printf("ret init = %d\n",ret);
+			uart_debug("uart_init error = %d",ret);
 			return UART_ERR;
 		}
 	}
 
-	if (pthread_create(&serial_receive_t, NULL, uart_receive_thread, &serial_fd) < 0) {
-		printf("pthread_create error\n");
+	if (pthread_create(&serial_receive_t, NULL, serial_port_receiving_thread, &fd) < 0) {
+		uart_debug("pthread_create error");
 		return UART_ERR;
 	}
 
-	for(;;) {
+	signal(SIGINT, sighandler);
+
+	for(;!g_is_quit;) {
+		putchar('#');
 		fgets(buf, LEN_BUF_SEND, stdin);
-		if(UART_OK == uart_send(serial_fd, buf, strlen(buf))) {
-			printf("%d time send data successful\n",i++);
-		} else {
-			printf("send data failed!\n");
+		if(UART_OK != uart_send(fd, buf, strlen(buf))) {
+			uart_debug("time send data failed");
 		}
 	}
 
-	uart_close(serial_fd);
+	pthread_join(serial_receive_t, NULL);
+	uart_close(fd);
 }
 #ifdef __cplusplus
 }
