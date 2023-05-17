@@ -203,32 +203,34 @@ static void *serial_port_receiving_thread(void *arg)
 {
 	int ret, i, n;
 	int fd;
-	fd_set readfds;
+	fd_set fds;
+	struct timeval time = {5, 500000};
 	char buf[LEN_BUF_RECV];
 	fd = *(int*)arg;
 	for(;!g_is_quit;) {
-		FD_ZERO(&readfds);
-		FD_SET(fd, &readfds);
-		ret = select(fd + 1, &readfds, NULL, NULL, NULL);
-
-		if(ret <= 0) {
-			uart_debug("select failed %d", ret);
+		FD_ZERO(&fds);
+		FD_SET(fd, &fds);
+		ret = select(fd + 1, &fds, NULL, NULL, &time);
+		if (ret < 0) {
+			uart_debug("select failed ret = %d fd = %d", ret, fd);
 			continue;
+		} else if (ret == 0) {
+#if UART_DEBUG
+			uart_debug("select timeout ret = %d fd = %d", ret, fd);
+#endif
 		}
-		if(FD_ISSET(fd, &readfds) <= 0){
-			uart_debug("FD_ISSET failed");
-			continue;
+		if (FD_ISSET(fd, &fds)) {
+			do {
+				n = read(fd, buf, LEN_BUF_RECV);
+#if UART_DEBUG
+				uart_debug("%s", buf);
+#endif
+				for (i = 0; i < n; i++) {
+					printf("%.2x ", buf[i]);
+				}
+				putchar('\n');
+			} while(0 < n);
 		}
-		do {
-			n = read(fd, buf, LEN_BUF_RECV);
-	#if UART_DEBUG
-			uart_debug("%s", buf);
-	#endif
-			for (i = 0; i < n; i++) {
-				printf("%.2x ", buf[i]);
-			}
-			putchar('\n');
-		} while(0 < n);
 	}
 
 	return NULL;
