@@ -1,0 +1,11 @@
+{
+	"files.associations": {
+		"signal.h": "c",
+		"uart.h": "c",
+		"pthread.h": "c",
+		"stat.h": "c",
+		"termios.h": "c",
+		"stdio.h": "c"
+	},
+	"C_Cpp.errorSquiggles": "disabled"
+}

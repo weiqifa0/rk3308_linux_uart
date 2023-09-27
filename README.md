@@ -8,3 +8,5 @@
 
 # 增加可以输入ctrl +c 退出程序
 ![image](https://github.com/weiqifa0/rk3308_linux_uart/assets/11375905/14d6bac8-3594-4e9f-8051-76e95ef41455)
+
+编译链是我自己系统里面的，自己搞的要自己找哈。
