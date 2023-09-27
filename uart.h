@@ -33,4 +33,10 @@ int rk3308_uart_init(int fd, int baud_rate, int flow_ctrl, int data_bits, int st
 int rk3308_uart_close(int fd);
 int rk3308_uart_open(const char* uart_device_name);
 
+struct uart_stu
+{
+	bool is_runing;
+	bool is_read_data_show_hex;
+};
+
 #endif //__RK3308_H
