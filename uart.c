@@ -1,5 +1,5 @@
 /*
-** Copyright (c) 2023 The Roomix project. All rights reserved.
+** Copyright (c) 2023 The UART project. All rights reserved.
 ** Created by crisqifawei 2023
 */
 
@@ -46,7 +46,7 @@ int rk3308_uart_init(int fd, int baud_rate, int flow_ctrl, int data_bits, int st
 	int baud_rate_seting_array[] = {115200, 19200, 9600, 4800, 2400, 1200, 300};
 
 	struct termios options;
-	uart_debug("baud_rate = %d, flow_ctrl = %d, data_bits = %d, stop_bits =%d, parity =%d",
+	uart_debug("baud_rate = %d, flow_ctrl = %d, data_bits = %d, stop_bits =%d, parity =%c",
 									baud_rate, flow_ctrl, data_bits, stop_bits, parity);
 	if(0 != tcgetattr(fd, &options)) {
 		uart_debug("read uart parm error, check device driver");
@@ -173,4 +173,61 @@ int rk3308_uart_send(int fd, char *buf, int data_len)
 	}
 
 	return RK3308_UART_OK;
+}
+
+int uart_input_detection(struct serial_port_data_structure* stu_ptr, int argc, char **argv)
+{
+	int opt = 0;
+	opterr = 0 ;
+	int ret = 0;
+
+	while ((opt = getopt (argc, argv, "T:t:B:b:D:d:S:s:F:f:P:p:HhX:x:Vv")) != EOF)
+	switch (opt)
+	{
+		case 'T':
+		case 't':
+			stu_ptr->tty_dev = optarg;
+			uart_debug("tty_dev = %s", optarg);
+			break;
+		case 'B':
+		case 'b':
+			stu_ptr->baud_rate = atoi(optarg);
+			uart_debug("baud_rate = %d", stu_ptr->baud_rate);
+			break;
+		case 'D':
+		case 'd':
+			stu_ptr->data_bits = atoi(optarg);
+			uart_debug("data_bits = %d", stu_ptr->data_bits);
+			break;
+		case 'S':
+		case 's':
+			stu_ptr->stop_bits = atoi(optarg);
+			uart_debug("stop_bits = %d", stu_ptr->stop_bits);
+			break;
+		case 'F':
+		case 'f':
+			stu_ptr->flow_ctrl = atoi(optarg);
+			uart_debug("flow_ctrl = %d", stu_ptr->flow_ctrl);
+			break;
+		case 'P':
+		case 'p':
+			stu_ptr->parity = atoi(optarg);
+			uart_debug("parity = %c", stu_ptr->parity);
+			break;
+		case 'x':
+		case 'X':
+			stu_ptr->is_read_data_show_hex = atoi(optarg);
+			uart_debug("is_read_data_show_hex = %d", stu_ptr->is_read_data_show_hex);
+			break;
+		case 'H':
+		case 'h':
+			uart_debug("Example: %s Version:%s", argv[0], UART_SOFT_VERSION);
+			uart_debug("Example: %s -T /dev/ttyS1 -B 115200", argv[0]);
+			uart_debug("Example Not to Show Hex: %s -T /dev/ttyS1 -B 115200 -x 0", argv[0]);
+			ret = -1;
+			break;
+		default:
+			uart_debug("other option is wrong");
+	}
+	return ret;
 }
