@@ -14,7 +14,7 @@
 #define DEFAULT_SHOW_HEX  1
 #define DEFAULT_RUNNING   1
 
-struct serial_port_data_structure serial_port_data_structure_t = {DEFAULT_TTY_DEV, DEFAULT_BAUD_RATE, DEFAULT_DATA_BITS, DEFAULT_STOP_BITS, DEFAULT_FLOW_CTRL, DEFAULT_PARITY, DEFAULT_SHOW_HEX, DEFAULT_RUNNING};
+struct serial_stu serial_stu_t = {DEFAULT_TTY_DEV, DEFAULT_BAUD_RATE, DEFAULT_DATA_BITS, DEFAULT_STOP_BITS, DEFAULT_FLOW_CTRL, DEFAULT_PARITY, DEFAULT_SHOW_HEX, DEFAULT_RUNNING};
 
 static void *uart_read_thread_function(void *arg)
 {
@@ -25,7 +25,7 @@ static void *uart_read_thread_function(void *arg)
 	char buf[RK3308_UART_READ_BUFF_SIZE_BYTES];
 	fd = *(int*)arg;
 
-	for(; serial_port_data_structure_t.is_runing ;) {
+	for(; serial_stu_t.is_runing ;) {
 		FD_ZERO(&fds);
 		FD_SET(fd, &fds);
 		ret = select(fd + 1, &fds, NULL, NULL, &time);
@@ -36,7 +36,7 @@ static void *uart_read_thread_function(void *arg)
 		if (FD_ISSET(fd, &fds)) {
 			do {
 				n = read(fd, buf, RK3308_UART_READ_BUFF_SIZE_BYTES);
-				if (serial_port_data_structure_t.is_read_data_show_hex) {
+				if (serial_stu_t.hex_show) {
 					for (i = 0; i < n; i++) {
 						printf("%.2x ", buf[i]);
 					}
@@ -52,7 +52,7 @@ static void *uart_read_thread_function(void *arg)
 }
 
 void signal_handler_function(int signum) {
-	serial_port_data_structure_t.is_runing = false;
+	serial_stu_t.is_runing = false;
 	uart_debug("Quit");
 	exit(0);
 }
@@ -63,17 +63,17 @@ int main(int argc, char **argv)
 	char buf[RK3308_UART_SEND_BUFF_SIZE_BYTES];
 	pthread_t uart_read_thread;
 
-	if (uart_input_detection(&serial_port_data_structure_t, argc, argv) < 0) {
+	if (uart_input_detection(&serial_stu_t, argc, argv) < 0) {
 		return 0;
 	}
 
-	fd = rk3308_uart_open(serial_port_data_structure_t.tty_dev);
+	fd = rk3308_uart_open(serial_stu_t.tty_dev);
 	if(RK3308_UART_ERR == fd) {
 		uart_debug("rk3308_uart_open error = %d", fd);
 		return RK3308_UART_ERR;
 	}
 
-	ret = rk3308_uart_init(fd, serial_port_data_structure_t.baud_rate, serial_port_data_structure_t.flow_ctrl, serial_port_data_structure_t.data_bits, serial_port_data_structure_t.stop_bits, serial_port_data_structure_t.parity);
+	ret = rk3308_uart_init(fd, serial_stu_t.baud_rate, serial_stu_t.flow_ctrl, serial_stu_t.data_bits, serial_stu_t.stop_bits, serial_stu_t.parity);
 	if(RK3308_UART_ERR == ret) {
 		uart_debug("rk3308_uart_init error = %d",ret);
 		return RK3308_UART_ERR;
@@ -86,7 +86,7 @@ int main(int argc, char **argv)
 
 	signal(SIGINT, signal_handler_function);
 
-	for(; serial_port_data_structure_t.is_runing ;) {
+	for(; serial_stu_t.is_runing ;) {
 		putchar('#');
 		fgets(buf, RK3308_UART_SEND_BUFF_SIZE_BYTES, stdin);
 		if(RK3308_UART_OK != rk3308_uart_send(fd, buf, strlen(buf))) {

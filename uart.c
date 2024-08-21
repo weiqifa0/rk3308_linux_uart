@@ -38,15 +38,23 @@ int rk3308_uart_close(int fd)
 	}
 	return 0;
 }
-
+/*
+#define  B57600   0010001
+#define  B115200  0010002
+#define  B230400  0010003
+#define  B460800  0010004
+#define  B500000  0010005
+#define  B576000  0010006
+#define  B921600  0010007
+*/
 int rk3308_uart_init(int fd, int baud_rate, int flow_ctrl, int data_bits, int stop_bits, int parity)
 {
 	int i;
-	int baud_rate_array[] = {B115200, B19200, B9600, B4800, B2400, B1200, B300};
-	int baud_rate_seting_array[] = {115200, 19200, 9600, 4800, 2400, 1200, 300};
+	int baud_rate_array[] = {B921600, B576000, B500000, B460800, B230400, B115200, B19200, B9600, B4800, B2400, B1200, B300};
+	int baud_rate_seting_array[] = {921600, 576000, 500000, 460800, 230400, 115200, 19200, 9600, 4800, 2400, 1200, 300};
 
 	struct termios options;
-	uart_debug("baud_rate = %d, flow_ctrl = %d, data_bits = %d, stop_bits =%d, parity =%c",
+	uart_debug("baud_rate = %d, flow_ctrl = %d, data_bits = %d, stop_bits = %d, parity = %c",
 									baud_rate, flow_ctrl, data_bits, stop_bits, parity);
 	if(0 != tcgetattr(fd, &options)) {
 		uart_debug("read uart parm error, check device driver");
@@ -175,7 +183,7 @@ int rk3308_uart_send(int fd, char *buf, int data_len)
 	return RK3308_UART_OK;
 }
 
-int uart_input_detection(struct serial_port_data_structure* stu_ptr, int argc, char **argv)
+int uart_input_detection(struct serial_stu* stu_ptr, int argc, char **argv)
 {
 	int opt = 0;
 	opterr = 0 ;
@@ -216,8 +224,8 @@ int uart_input_detection(struct serial_port_data_structure* stu_ptr, int argc, c
 			break;
 		case 'x':
 		case 'X':
-			stu_ptr->is_read_data_show_hex = atoi(optarg);
-			uart_debug("is_read_data_show_hex = %d", stu_ptr->is_read_data_show_hex);
+			stu_ptr->hex_show = atoi(optarg);
+			uart_debug("hex_show = %d", stu_ptr->hex_show);
 			break;
 		case 'H':
 		case 'h':
